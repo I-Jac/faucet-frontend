@@ -3,6 +3,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/faucet-frontend/', // Set for GitHub Pages deployment
   plugins: [
     nodePolyfills({
       // To exclude specific polyfills, add them to this list.

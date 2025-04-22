@@ -22,11 +22,17 @@
         </select>
       </div>
       <div class="card">
+        <label for="mint-amount">Amount:</label>
+        <input type="number" id="mint-amount" value="10" min="1" step="1"/>
+        <!-- Note: Max amount depends on selected token decimals -->
+      </div>
+      <div class="card">
          <button id="mint-button" type="button">Mint Tokens</button>
       </div>
       <div id="status-area">
-        <p>Status: Idle</p>
+        <p id="status-message">Status: Idle</p>
         <p id="tx-signature"></p>
+        <div id="recipient-links-area" class="links-area"></div>
       </div>
     </div>
     <script type="module" src="/src/main.ts"></script>

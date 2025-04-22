@@ -6,16 +6,19 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy": "npm run build && gh-pages -d dist"
   },
   "devDependencies": {
     "buffer": "^6.0.3",
-    "typescript": "~5.7.2",
-    "vite": "^6.3.1",
-    "vite-plugin-node-polyfills": "^0.23.0"
+    "gh-pages": "^6.1.1",
+    "typescript": "^5.2.2",
+    "vite": "^5.3.4",
+    "vite-plugin-node-polyfills": "^0.22.0"
   },
   "dependencies": {
-    "@solana/spl-token": "^0.4.13",
-    "@solana/web3.js": "^1.98.0"
+    "@metaplex-foundation/umi-bundle-defaults": "^0.9.1",
+    "@solana/spl-token": "^0.4.8",
+    "@solana/web3.js": "^1.95.1"
   }
 }

@@ -73,7 +73,7 @@ const MINT_ADDRESSES: { [symbol: string]: string } = {
 const RPC_ENDPOINT = 'http://127.0.0.1:8900'; // Or your desired endpoint
 
 // 4. Configure faucet amount (display units)
-const FAUCET_AMOUNT_DISPLAY = 100;
+const FAUCET_AMOUNT_DISPLAY = 10; // Reduced amount to prevent u64 overflow for 18+ decimals
 
 // --- End Configuration ---
 

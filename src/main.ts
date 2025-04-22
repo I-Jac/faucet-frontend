@@ -1,5 +1,5 @@
 import './style.css';
-import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL, Transaction, SystemProgram } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import {
     getOrCreateAssociatedTokenAccount,
     mintTo,
@@ -125,13 +125,6 @@ function getClusterInfo(): ClusterInfo {
     // Default to custom cluster
     const customUrlParam = `custom&customUrl=${encodeURIComponent(RPC_ENDPOINT)}`;
     return { explorerClusterParam: customUrlParam, solscanClusterParam: customUrlParam };
-}
-
-/**
- * Generates a Solana Explorer URL.
- */
-function generateExplorerUrl(type: 'tx' | 'account' | 'address', id: string, clusterInfo: ClusterInfo): string {
-    return `https://explorer.solana.com/${type}/${id}?cluster=${clusterInfo.explorerClusterParam}`;
 }
 
 /**

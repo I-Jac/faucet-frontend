@@ -7,6 +7,9 @@ import {
     ASSOCIATED_TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
 
+// Import the mint addresses data directly (Vite handles JSON imports)
+import MINT_ADDRESSES_DATA from './mint-addresses.json';
+
 // --- Configuration --- > PASTE YOUR DATA HERE < ---
 
 // 1. PASTE the secret key array from poolTokens/mint-authority.json here
@@ -14,58 +17,13 @@ import {
 const MINT_AUTHORITY_SECRET_KEY = new Uint8Array([82,223,100,247,46,15,85,199,116,144,243,171,133,84,19,137,105,150,249,230,46,76,210,26,149,206,118,170,140,171,139,179,101,46,221,188,162,223,224,202,54,154,33,236,149,7,73,140,124,57,99,40,224,50,158,101,17,237,161,139,124,106,11,43]);
 
 // 2. PASTE the JSON object from poolTokens/mint-addresses.json here
-const MINT_ADDRESSES: { [symbol: string]: string } = {
-    "BTC": "8TEZpfG73hBJzLPtGboVsamr2RJ83MZuaMUx64ghixPa",
-    "ETH": "B4aDwjZsdr5VDWWLA7vMr1QCYaURauKWbLFHzK1tu3uF",
-    "XRP": "Cnu6XkqwCNvGSVwss7UaBcougviBWy1d3F4ohDYuQ6tX",
-    "SOL": "EaD92embZxyTum1gfWRoyXpH9yuPUPJmpRrWEjtaeW7c",
-    "ADA": "DteuwQbromPMYE2AkW4EnTErK7qXEbKddvusaaUKdVYt",
-    "DOGE": "KajHTMqyJEWPvCU3X4RJHa5PGfA1A4RVPDYwyxhGhiz",
-    "LINK": "6X9yUhJ11BqoDLLNMni2znNu4GHinDHxEUQyQBmCQpR2",
-    "SUI": "2UmGYkicTu4FnVYBDBU95Baf7YcmW2PatFyYJRcAZwTu",
-    "AVAX": "7KaFaR7t21suiffA9zU5rMPoTGwtvHTe6VjTCCRTJfnc",
-    "SHIB": "FjirMjMQnhLPcvD4uiGSGKmfjDgUkoUq1uRPanW1wEFb",
-    "LTC": "9Qmvm4fAE1EyajiPk7uCvcLRMyfeNoCE9M2Ekn6b2L8v",
-    "DOT": "A5S1yALfsV6mCCizXRgUrXr6HHYq63ZwwjfWV81ND1xy",
-    "UNI": "2J8ign74KuumXJZH1vpywgtpcoqEdVfTnVvyYEwH3Z3Q",
-    "ONDO": "Ca5uUdDpmdRcf9zmXaZ7mfMYLwyagdjcSzikguJvwnHN",
-    "AAVE": "5uwvndmbLAd63EYPe9VL7sUytNhmAjaDQ6ZBYxBshNLE",
-    "PEPE": "34miCuk9GRYqgMse86SZkPo7xTHfg59z3TtiBhYd5eJd",
-    "TRUMP": "8XPnUq8H9Ezyn64gBreagj5V9B6mfp9zwM2siDviKtt8",
-    "POL": "8mdgmidJD2Wf3joSFGv5u2jQ3uHdQM4L1c5kb3D7xpiy",
-    "FIL": "HZWYL7LZr38a1KugfmLm3WbwHjD84ed2ubeRyRdENitR",
-    "RENDER": "2igi6sZ9EQHahZHDvfSNEfyVJqYxk1N5zppGezsVZM6S",
-    "ARB": "41Fw3LeckLHQ2BBDSqMGgS8UauYPNnSWXGws1tt1e9yc",
-    "JUP": "EXGsQkTw3Gdy1ZmhuaeU7cBfHgTLobXLTrm7HkXm2rbS",
-    "OP": "9jdUAubZiSxuTjpR9ZRHG9cz9EQ3vkohvQ8YehcKKHzW",
-    "S": "BzSvgHopc4NziDFz6EE9JYNFu4PckQ3xs9n1WWHHtyqF",
-    "FET": "JDHmTAifSLH7KRTdEPizWSnTqzHTCcsXBqqhztypbtXT",
-    "INJ": "AHcmTL9tHbYbeT4xxpPDqKEzGYKP9g66Jhvt8aJehBSF",
-    "IMX": "CPCgf1poFEJf9DzMRcxPBhDmoLDqKCUCrkYGpbq1ynPo",
-    "WLD": "BbuQ7nE8HN7VW5E3BC9qQdoSsmnNM7b1AAzht2aQ6swy",
-    "LDO": "49tRYf6nKDLHxqhvy2vzUd8Yc76M7XiS6jE5WdTMot8A",
-    "GRT": "45nBtTEA8xgzLzL35zGtGWeGrBo4ubGZauaesGyLmp8p",
-    "QNT": "7By5hcUWMrJF9qRByYZQc5nciAYyB6U2ZfDMCt7pZks1",
-    "BONK": "62EE7RtZjMhYonwZqX5YXN5zoovUPfhpc8D2KUaHt3MG",
-    "JTO": "25ZKkuJGXjVniX38jscQ2AucDcVBUwMt8w7dyUKvUPLF",
-    "SAND": "GfBJV4Z4goVdkJc5rJ9Sictou1SxRbnC4gbdbjC67nhf",
-    "ENS": "DkYT39GXcd2NuMMvWiC6Qz14LBKETCE5EPcGLx7S1wkd",
-    "GALA": "DN4JzZ4kNWnhNshaqSknRdbXaWPvEkWmcZ7EikAsASEs",
-    "PYTH": "6Vzkk9Y6EbpCjAELcymaEhd29g5CcjbxR1RVi782YgEd",
-    "RAY": "FQtsUf8KQwSaj7nskPJjvHtqaRdePmwcnNbV9KqJxQF8",
-    "HNT": "F3GhzxLhoYnxm4pvi8Kj6vKAsacB5C66GcfWiJ7FES5H",
-    "AXS": "FqikvtSgviUQhs5biftgBXsFWN5RAo9JPrmw3E1Hu4xJ",
-    "MANA": "G578RigAgsrodmpUJWroKhAK32fH56Gv9dBnesgGfwFd",
-    "CRV": "DVgx2EEo7634RTQuBj7zo2zfwW4iCQw7Vmfdpo3KCskN",
-    "WIF": "AhxrvgyMFG6fmfv1ouhFG2KUGoPST41wYNnYhe2yYiqy",
-    "GRASS": "DgPQNuE6apymTMdAxknzfM52M656s8kCoMogZtpphrjZ",
-    "CAKE": "G8jXVGvi485sgtjbe8qaDTASE1Z8eubW7GyGU7BzGhn8",
-    "VIRTUAL": "4q5mukGNTM2MzKngSZ14nkTVGSNkJzfkFZtSKfzYjSpd",
-    "AERO": "GRZYi4MwERgntsmegikw3s54ukjYghsct2WurnF6brTA",
-    "CHZ": "29YyyrnsvFJmQVRZAf2a4qot8TZn8f77FamTf6G5BdGa",
-    "COMP": "5WK8uMMgWG3M3xcjpvrvPebMXtmL5KG4ez3sQH6oRycL",
-    "APE": "3JUY1aw15h3ak3kbSKeZrGTUuGApQvz6vGXnERobqBhb"
-};
+// const MINT_ADDRESSES: { [symbol: string]: string } = { ... }; // <-- REMOVE HARDCODED OBJECT
+
+// Declare MINT_ADDRESSES - will be populated by fetching
+// let MINT_ADDRESSES: { [symbol: string]: string } = {};
+
+// Assign imported data directly (Type assertion might be needed depending on TS config)
+const MINT_ADDRESSES: { [symbol: string]: string } = MINT_ADDRESSES_DATA as { [symbol: string]: string };
 
 // 3. Configure your RPC Endpoint (localhost, devnet, etc.)
 const RPC_ENDPOINT = 'http://127.0.0.1:8900'; // Use port 8900
@@ -169,6 +127,13 @@ function showRecipientLinks(address: string) {
 function populateTokenDropdown() {
     if (!tokenSelect) return;
     tokenSelect.innerHTML = '<option value="">-- Select Token --</option>'; // Clear existing
+
+    // Ensure MINT_ADDRESSES is populated before using it
+    if (Object.keys(MINT_ADDRESSES).length === 0) {
+        console.warn('MINT_ADDRESSES not populated yet for dropdown.');
+        updateStatus('Error: Token list not loaded. Check console.', true);
+        return; // Don't populate if data isn't ready
+    }
 
     const sortedSymbols = Object.keys(MINT_ADDRESSES).sort();
 
@@ -308,16 +273,15 @@ async function initialize() {
         return;
     }
     // Check if placeholder key is still there (very basic check)
-    // Note: This check needs to be updated if you generate a key starting with [1, 2, 3, ...]
     if (MINT_AUTHORITY_SECRET_KEY[0] === 1 && MINT_AUTHORITY_SECRET_KEY[1] === 2 && MINT_AUTHORITY_SECRET_KEY[2] === 3) {
         updateStatus('ERROR: Placeholder MINT_AUTHORITY_SECRET_KEY found. Paste your actual key.', true);
         return;
     }
-    // Check if mint addresses are empty or placeholder
-    if (Object.keys(MINT_ADDRESSES).length === 0 || MINT_ADDRESSES["BTC"]?.startsWith('Your')) {
-        updateStatus('ERROR: Placeholder or empty MINT_ADDRESSES found. Paste your actual mint addresses object.', true);
-        return;
-    }
+    // // Check if mint addresses are empty or placeholder // <-- REMOVE this check as it will be empty initially
+    // if (Object.keys(MINT_ADDRESSES).length === 0 || MINT_ADDRESSES["BTC"]?.startsWith('Your')) {
+    //     updateStatus('ERROR: Placeholder or empty MINT_ADDRESSES found. Paste your actual mint addresses object.', true);
+    //     return;
+    // }
 
     try {
         // Determine cluster info early
@@ -332,6 +296,14 @@ async function initialize() {
         await connection.getVersion(); // Test connection
         console.log('Connection successful.');
 
+        // Data is imported, proceed directly
+        if (Object.keys(MINT_ADDRESSES).length === 0) {
+            // This should ideally not happen if the import worked
+            throw new Error('Mint addresses data is empty after import.'); 
+        }
+        console.log('Successfully loaded MINT_ADDRESSES via import:', MINT_ADDRESSES);
+
+        // Now populate the dropdown after addresses are loaded
         populateTokenDropdown();
 
         if (mintButton) {

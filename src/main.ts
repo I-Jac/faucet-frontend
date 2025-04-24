@@ -1,5 +1,5 @@
 import './style.css';
-import { Connection, Keypair, PublicKey, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey } from '@solana/web3.js';
 import {
     getOrCreateAssociatedTokenAccount,
     mintTo,

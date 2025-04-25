@@ -47,9 +47,9 @@
             <option value="">-- Loading Feeds --</option>
           </select>
         </div>
-        <div class="form-group">
+        <div class="form-group input-with-button">
           <label for="new-price">Set Price:</label>
-          <input type="text" id="new-price" placeholder="e.g., 150.00" min="0" />
+          <input type="text" id="new-price" placeholder="e.g., 150.00" />
           <small>Input dollar value</small>
         </div>
         <button id="update-price-button" type="button">Update Price</button>
@@ -58,6 +58,25 @@
         <div id="feed-account-link-area" class="links-area"></div>
       </div>
       <!-- End New Section -->
+
+      <!-- Added Price Table Section -->
+      <div class="card">
+        <h2>Current Prices & Percentage Updates</h2>
+        
+        <!-- Added Bulk Update Row -->
+        <div class="form-group bulk-update-row"> 
+          <label for="bulk-percentage-input">Apply % Change to All:</label>
+          <input type="number" id="bulk-percentage-input" placeholder="+/-%" step="any" />
+          <button type="button" id="bulk-update-button">Update All</button>
+        </div>
+        <!-- End Bulk Update Row -->
+        
+        <div id="price-table-status">Loading prices...</div>
+        <div id="price-table-container"> 
+          <!-- Table rows will be dynamically inserted here -->
+        </div>
+      </div>
+      <!-- End Price Table Section -->
 
     </div>
     <script type="module" src="/src/main.ts"></script>

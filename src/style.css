@@ -141,6 +141,36 @@ input::placeholder {
     font-style: italic;
 }
 
+/* Layout for input with adjacent button */
+.input-with-button {
+    position: relative; /* Needed for absolute positioning of button if desired, or use flex */
+    display: flex; /* Use flexbox for easier alignment */
+    flex-wrap: wrap; /* Allow items to wrap */
+    align-items: center; /* Align items vertically */
+}
+
+.input-with-button label {
+    width: 100%; /* Make label take full width */
+}
+
+.input-with-button input {
+    flex-grow: 1; /* Allow input to take available space */
+    margin-right: 0.5em; /* Space between input and button */
+}
+
+.input-with-button .inline-button {
+    padding: 0.4em 0.6em; /* Adjust padding */
+    font-size: 0.9em;
+    height: fit-content; /* Adjust height */
+    margin-top: 0.2em; /* Align with input's margin-top */
+}
+
+.input-with-button small {
+     width: 100%; /* Make small text take full width */
+     display: block; /* Ensure it takes its own line */
+     margin-top: 0.3em;
+}
+
 #tx-signature a,
 #update-tx-signature a,
 .links-area a {
@@ -154,6 +184,40 @@ input::placeholder {
 .error {
     color: #ff6b6b;
     font-weight: bold;
+}
+
+/* Styles for Price Table */
+#price-table-container {
+    margin-top: 1em;
+    display: grid;
+    grid-template-columns: auto 1fr auto auto; /* Symbol, Price, Input, Button */
+    gap: 0.5em 1em; /* Row gap, Column gap */
+    align-items: center;
+}
+
+#price-table-container > div { /* Style direct div children as rows */
+    display: contents; /* Allow children to participate in the grid */
+}
+
+/* Style elements within the grid */
+#price-table-container span { 
+    text-align: right; 
+}
+
+#price-table-container input[type="number"] {
+    width: 80px; /* Fixed width for percentage input */
+    padding: 0.4em;
+    text-align: right;
+}
+
+#price-table-container button {
+    padding: 0.4em 0.8em; /* Smaller button */
+    font-size: 0.9em;
+}
+
+#price-table-status {
+    font-style: italic;
+    margin-bottom: 1em;
 }
 
 @media (prefers-color-scheme: light) {
@@ -180,4 +244,27 @@ input::placeholder {
   input::placeholder {
       color: #aaa;
   }
+}
+
+/* Styling for Bulk Update Row */
+.bulk-update-row {
+    display: flex;
+    align-items: flex-end; /* Align items to the bottom */
+    gap: 1em;
+    margin-bottom: 1.5em; /* Extra space below */
+    padding-bottom: 1em;
+    border-bottom: 1px solid #444;
+}
+
+.bulk-update-row label {
+    margin-bottom: 0; /* Remove default label margin */
+}
+
+.bulk-update-row input[type="number"] {
+    width: 100px; /* Adjust width as needed */
+    margin-top: 0; /* Remove default input margin */
+}
+
+.bulk-update-row button {
+    margin-top: 0; /* Remove default button margin */
 }

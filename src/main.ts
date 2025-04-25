@@ -1,23 +1,35 @@
 import './style.css';
-import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+import {
+    Connection,
+    Keypair,
+    PublicKey,
+    Transaction,
+    TransactionInstruction,
+    AccountMeta,
+    ComputeBudgetProgram,
+    Commitment
+} from '@solana/web3.js';
 import {
     getOrCreateAssociatedTokenAccount,
     mintTo,
     TOKEN_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
-// import * as anchor from "@coral-xyz/anchor"; // Removed Anchor import
-// Remove the explicit Wallet import
+import * as anchor from "@coral-xyz/anchor";
 
 // Import the mock price feed program IDL type and program ID
-// Adjust the path based on your project structure relative to faucet-frontend
-// import { MockPriceFeed } from './mock_price_feed'; // Removed Type import
-// import IDL from './mock_price_feed.json'; // Removed IDL import
+import IDL from './mock_price_feed.json';
 
 // Import the mint addresses data directly (Vite handles JSON imports)
 import MINT_ADDRESSES_DATA from './mint-addresses.json';
 // Import the mock price feed data (Vite handles JSON imports)
-// import MOCK_PRICE_FEEDS_DATA from './mockPriceFeeds.json'; // Removed price feed import
+import MOCK_PRICE_FEEDS_DATA from './mockPriceFeeds.json';
+
+// --- Constants --- Added Price Update Constants
+const UPDATE_PRICE_DISCRIMINATOR = Buffer.from([61, 34, 117, 155, 75, 34, 123, 208]);
+const PRIORITY_FEE = 10000;
+const COMPUTE_UNIT_LIMIT = 200000;
+const PRICE_EXPONENT = -8; // Hardcoded exponent
 
 // --- Configuration --- > PASTE YOUR DATA HERE < ---
 
@@ -34,50 +46,19 @@ const MINT_AUTHORITY_SECRET_KEY = new Uint8Array([108,33,192,134,193,113,214,240
 // Assign imported data directly (Type assertion might be needed depending on TS config)
 const MINT_ADDRESSES: { [symbol: string]: string } = MINT_ADDRESSES_DATA as { [symbol: string]: string };
 // Assign imported price feed data
-// const MOCK_PRICE_FEEDS: { [symbol: string]: string } = MOCK_PRICE_FEEDS_DATA as { [symbol: string]: string }; // Removed
+const MOCK_PRICE_FEEDS: { [symbol: string]: string } = MOCK_PRICE_FEEDS_DATA as { [symbol: string]: string };
 
 // 3. Configure your RPC Endpoint (localhost, devnet, etc.)
 const RPC_ENDPOINT = 'http://127.0.0.1:8900'; // Use port 8900
 
 // --- End Configuration ---
 
-// --- Simple Wallet Implementation for Keypair ---
-// This might be needed if we were using Anchor Provider, but not needed for direct SPL calls. Can be removed if unused later.
-// class KeypairWallet implements anchor.Wallet {
-//     constructor(readonly keypair: Keypair) {}
-//
-//     async signTransaction<T extends Transaction | VersionedTransaction>(tx: T): Promise<T> {
-//         if (tx instanceof VersionedTransaction) {
-//             tx.sign([this.keypair]);
-//         } else { // Legacy Transaction
-//             tx.partialSign(this.keypair);
-//         }
-//         return tx;
-//     }
-//
-//     async signAllTransactions<T extends Transaction | VersionedTransaction>(txs: T[]): Promise<T[]> {
-//         return txs.map((t) => {
-//             if (t instanceof VersionedTransaction) {
-//                 t.sign([this.keypair]);
-//             } else { // Legacy Transaction
-//                  t.partialSign(this.keypair);
-//             }
-//             return t;
-//         });
-//     }
-//
-//     get publicKey(): PublicKey {
-//         return this.keypair.publicKey;
-//     }
-// }
-// ---------------------------------------------
+// --- REMOVED Simple Wallet Implementation ---
 
 // Globals
 let connection: Connection;
-let mintAuthority: Keypair;
+let mintAuthority: Keypair; // Acts as payer for both minting and price updates
 let currentClusterInfo: ClusterInfo; // Store cluster info globally
-// let provider: anchor.AnchorProvider; // Removed Anchor provider
-// let mockPriceFeedProgram: anchor.Program<MockPriceFeed>; // Removed program instance
 
 // Interface for cluster information
 interface ClusterInfo {
@@ -85,34 +66,49 @@ interface ClusterInfo {
     solscanClusterParam: string;  // For solscan.io
 }
 
-// UI Elements
+// --- Minting UI Elements ---
 const recipientInput = document.getElementById('recipient-address') as HTMLInputElement;
 const tokenSelect = document.getElementById('token-select') as HTMLSelectElement;
 const amountInput = document.getElementById('mint-amount') as HTMLInputElement;
 const mintButton = document.getElementById('mint-button') as HTMLButtonElement;
-const statusMessageEl = document.getElementById('status-message') as HTMLParagraphElement;
-const txSignatureEl = document.getElementById('tx-signature') as HTMLParagraphElement;
+const statusMessageEl = document.getElementById('status-message') as HTMLParagraphElement; // For minting status
+const txSignatureEl = document.getElementById('tx-signature') as HTMLParagraphElement; // For minting TX
 const recipientLinksArea = document.getElementById('recipient-links-area') as HTMLDivElement;
 
-// --- Removed UI Elements for Price Update ---
-// const priceFeedSelect = document.getElementById('price-feed-select') as HTMLSelectElement;
-// const newPriceInput = document.getElementById('new-price') as HTMLInputElement;
-// const updatePriceButton = document.getElementById('update-price-button') as HTMLButtonElement;
-// const updateStatusMessageEl = document.getElementById('update-status-message') as HTMLParagraphElement;
-// const updateTxSignatureEl = document.getElementById('update-tx-signature') as HTMLParagraphElement;
+// --- Price Update UI Elements --- Added
+const priceFeedSelect = document.getElementById('price-feed-select') as HTMLSelectElement;
+const newPriceInput = document.getElementById('new-price') as HTMLInputElement;
+const updatePriceButton = document.getElementById('update-price-button') as HTMLButtonElement;
+const updateStatusMessageEl = document.getElementById('update-status-message') as HTMLParagraphElement; // Dedicated status for price updates
+const updateTxSignatureEl = document.getElementById('update-tx-signature') as HTMLParagraphElement; // Dedicated TX link for price updates
+const feedAccountLinkArea = document.getElementById('feed-account-link-area') as HTMLDivElement; // Dedicated link area for feed account
 
 /**
- * Update the status display and clear links.
+ * Update the MINTING status display and clear minting links.
  */
 function updateStatus(message: string, isError = false) {
-    console.log(message);
+    console.log(`Mint Status: ${message}`); // Log distinction
     if (statusMessageEl) {
-        statusMessageEl.textContent = `Status: ${message}`;
+        statusMessageEl.textContent = `Mint Status: ${message}`;
         statusMessageEl.className = isError ? 'error' : '';
     }
-    // Clear links when status updates (except for final success state)
+    // Clear minting links only
     if (txSignatureEl) txSignatureEl.innerHTML = '';
     if (recipientLinksArea) recipientLinksArea.innerHTML = '';
+}
+
+/**
+ * Update the PRICE UPDATE status display and clear price update links. Added
+ */
+function updatePriceUpdateStatus(message: string, isError = false) {
+    console.log(`Price Update Status: ${message}`); // Log distinction
+    if (updateStatusMessageEl) {
+        updateStatusMessageEl.textContent = `Update Status: ${message}`;
+        updateStatusMessageEl.className = isError ? 'error' : '';
+    }
+    // Clear price update links only
+    if (updateTxSignatureEl) updateTxSignatureEl.innerHTML = '';
+    if (feedAccountLinkArea) feedAccountLinkArea.innerHTML = '';
 }
 
 /**
@@ -137,25 +133,21 @@ function getClusterInfo(): ClusterInfo {
  * Generates a Solscan URL.
  */
 function generateSolscanUrl(type: 'tx' | 'account' | 'token', id: string, clusterInfo: ClusterInfo): string {
-    // Note: Solscan uses 'token' for mint addresses, 'account' for other accounts (like token accounts, wallets)
-    const solscanType = type === 'account' ? 'account' : type; // Map 'address' to 'account' if needed, or handle separately
+    const solscanType = type === 'account' ? 'account' : type;
     return `https://solscan.io/${solscanType}/${id}?cluster=${clusterInfo.solscanClusterParam}`;
 }
 
 /**
- * Update status with transaction signature links.
+ * Update status with MINTING transaction signature links.
  */
 function showTransactionLinks(signature: string) {
     if (!currentClusterInfo) {
-        currentClusterInfo = getClusterInfo(); // Ensure cluster info is available
+        currentClusterInfo = getClusterInfo();
     }
-    if (!txSignatureEl) return; // Check if element exists
+    if (!txSignatureEl) return;
 
-    // Only generate Solscan URL
     const solscanUrl = generateSolscanUrl('tx', signature, currentClusterInfo);
-
-    // Make the signature text the link to Solscan
-    txSignatureEl.innerHTML = `Transaction: <a href="${solscanUrl}" target="_blank" title="View on Solscan">${signature}</a>`;
+    txSignatureEl.innerHTML = `Mint Transaction: <a href="${solscanUrl}" target="_blank" title="View on Solscan">${signature}</a>`;
 }
 
 /**
@@ -164,12 +156,33 @@ function showTransactionLinks(signature: string) {
 function showRecipientLinks(address: string) {
     if (!recipientLinksArea || !currentClusterInfo) return;
 
-    // Only generate Solscan URL
     const solscanUrl = generateSolscanUrl('account', address, currentClusterInfo);
     const shortAddress = `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
-
-    // Make the recipient text the link to Solscan
     recipientLinksArea.innerHTML = `<a href="${solscanUrl}" target="_blank" title="View Recipient on Solscan">Recipient (${shortAddress})</a>`;
+}
+
+/**
+ * Update status with PRICE UPDATE transaction signature links. Added
+ */
+function showPriceUpdateTransactionLinks(signature: string) {
+    if (!currentClusterInfo) {
+        currentClusterInfo = getClusterInfo();
+    }
+    if (!updateTxSignatureEl) return;
+
+    const solscanUrl = generateSolscanUrl('tx', signature, currentClusterInfo);
+    updateTxSignatureEl.innerHTML = `Update Transaction: <a href="${solscanUrl}" target="_blank" title="View on Solscan">${signature}</a>`;
+}
+
+/**
+ * Show link to the price feed account. Added
+ */
+function showPriceFeedAccountLink(address: string) {
+    if (!feedAccountLinkArea || !currentClusterInfo) return;
+
+    const solscanUrl = generateSolscanUrl('account', address, currentClusterInfo);
+    const shortAddress = `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
+    feedAccountLinkArea.innerHTML = `Price Feed Account: <a href="${solscanUrl}" target="_blank" title="View Price Feed Account on Solscan">${shortAddress}</a>`;
 }
 
 /**
@@ -179,11 +192,10 @@ function populateTokenDropdown() {
     if (!tokenSelect) return;
     tokenSelect.innerHTML = '<option value="">-- Select Token --</option>'; // Clear existing
 
-    // Ensure MINT_ADDRESSES is populated before using it
     if (Object.keys(MINT_ADDRESSES).length === 0) {
         console.warn('MINT_ADDRESSES not populated yet for dropdown.');
         updateStatus('Error: Token list not loaded. Check console.', true);
-        return; // Don't populate if data isn't ready
+        return;
     }
 
     const sortedSymbols = Object.keys(MINT_ADDRESSES).sort();
@@ -196,8 +208,121 @@ function populateTokenDropdown() {
     }
 }
 
-// --- Removed populatePriceFeedDropdown function ---
-// function populatePriceFeedDropdown() { ... }
+/**
+ * Populate the mock price feed dropdown. Added
+ */
+function populatePriceFeedDropdown() {
+    if (!priceFeedSelect) return;
+    priceFeedSelect.innerHTML = '<option value="">-- Select Feed --</option>'; // Clear existing
+
+    if (Object.keys(MOCK_PRICE_FEEDS).length === 0) {
+        console.warn('MOCK_PRICE_FEEDS not populated yet for dropdown.');
+        updatePriceUpdateStatus('Error: Price feed list not loaded. Did you run `anchor test` in mockPriceFeed?', true);
+        return;
+    }
+
+    const sortedSymbols = Object.keys(MOCK_PRICE_FEEDS).sort();
+
+    for (const symbol of sortedSymbols) {
+        const option = document.createElement('option');
+        option.value = symbol;
+        option.textContent = symbol;
+        priceFeedSelect.appendChild(option);
+    }
+}
+
+// --- Utility Functions --- Added
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+/**
+ * Builds the instruction data buffer for the `update_price` instruction. Added
+ */
+function buildUpdatePriceInstructionData(newPrice: anchor.BN, newExpo: number): Buffer {
+    const buffer = Buffer.alloc(8 + 8 + 4);
+    UPDATE_PRICE_DISCRIMINATOR.copy(buffer, 0);
+    const priceBuffer = newPrice.toArrayLike(Buffer, 'le', 8);
+    priceBuffer.copy(buffer, 8);
+    const expoBuffer = Buffer.alloc(4);
+    expoBuffer.writeInt32LE(newExpo, 0);
+    expoBuffer.copy(buffer, 8 + 8);
+    return buffer;
+}
+
+/**
+ * Sends and confirms a transaction with retry logic. Added
+ */
+async function sendAndConfirmTransaction(
+  connection: Connection,
+  transaction: Transaction,
+  payer: Keypair,
+  maxRetries: number = 3,
+  retryDelayMs: number = 2000,
+  commitment: Commitment = "confirmed"
+): Promise<string> {
+  let lastError: any = null;
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+        const latestBlockhash = await connection.getLatestBlockhash(commitment);
+        transaction.recentBlockhash = latestBlockhash.blockhash;
+        transaction.lastValidBlockHeight = latestBlockhash.lastValidBlockHeight;
+        transaction.feePayer = payer.publicKey;
+
+        transaction.sign(payer);
+
+        const rawTransaction = transaction.serialize();
+        const options = {
+            skipPreflight: true,
+            commitment: commitment,
+            maxRetries: 0
+        };
+
+        const txSignature = await connection.sendRawTransaction(rawTransaction, options);
+        console.log(`    Transaction sent (Attempt ${i + 1}/${maxRetries}): ${txSignature}`);
+
+        const confirmation = await connection.confirmTransaction({
+            signature: txSignature,
+            blockhash: transaction.recentBlockhash,
+            lastValidBlockHeight: transaction.lastValidBlockHeight
+        }, commitment);
+
+        if (confirmation.value.err) {
+            console.error(`    Transaction confirmation failed (Attempt ${i + 1}/${maxRetries}):`, confirmation.value.err);
+            throw new Error(`Transaction failed confirmation: ${JSON.stringify(confirmation.value.err)}`);
+        }
+
+        console.log(`    Transaction confirmed successfully: ${txSignature}`);
+        return txSignature; // Success
+
+    } catch (err: any) {
+        lastError = err;
+        const errorMessage = err.message || "";
+
+        if (
+            errorMessage.includes("Blockhash not found") ||
+            errorMessage.includes("block height exceeded") ||
+            errorMessage.includes("TransactionExpiredTimeoutError") ||
+            errorMessage.includes("timed out") ||
+            errorMessage.includes("Node is behind") ||
+            errorMessage.includes("Network request failed") ||
+            errorMessage.includes("failed confirmation")
+        ) {
+            if (i < maxRetries - 1) {
+                console.warn(`    Transaction failed (Attempt ${i + 1}/${maxRetries}): ${errorMessage}. Retrying in ${retryDelayMs}ms...`);
+                await sleep(retryDelayMs);
+            } else {
+                console.error(`    Transaction failed after ${maxRetries} attempts.`);
+            }
+        } else {
+            console.error("    Non-retryable transaction error:", err);
+            throw err;
+        }
+    }
+  }
+  console.error("Send and confirm failed after all retries.", lastError);
+  throw lastError;
+}
+// --- End Utility Functions ---
 
 /**
  * Handle the mint button click.
@@ -317,89 +442,175 @@ async function handleMint() {
     }
 }
 
-// --- Removed handleUpdatePrice function ---
-// async function handleUpdatePrice() { ... }
+/**
+ * Handle the update price button click. Added
+ */
+async function handleUpdatePrice() {
+    if (!connection || !mintAuthority || !priceFeedSelect || !newPriceInput || !updatePriceButton) {
+        updatePriceUpdateStatus('Initialization error. Check console.', true);
+        return;
+    }
 
-// --- Removed Price Update status functions ---
-// function updatePriceUpdateStatus(message: string, isError = false) { ... }
-// function showPriceUpdateTransactionLinks(signature: string) { ... }
-// function showPriceFeedAccountLink(address: string) { ... }
+    const selectedSymbol = priceFeedSelect.value;
+    const newPriceDisplayStr = newPriceInput.value.trim();
+
+    if (!selectedSymbol) {
+        updatePriceUpdateStatus('Please select a price feed symbol.', true);
+        return;
+    }
+
+    if (!newPriceDisplayStr) {
+        updatePriceUpdateStatus('Please enter a new price.', true);
+        return;
+    }
+
+    let newPriceRaw: anchor.BN;
+    const hardcodedExponent = PRICE_EXPONENT;
+
+    try {
+        if (isNaN(parseFloat(newPriceDisplayStr))) {
+            throw new Error("Invalid number format for price.");
+        }
+        const parts = newPriceDisplayStr.split('.');
+        const integerPart = parts[0];
+        const fractionalPart = parts[1] || '';
+        const numZerosToAdd = Math.abs(hardcodedExponent);
+        if (fractionalPart.length > numZerosToAdd) {
+            throw new Error(`Input precision (${fractionalPart.length} decimals) exceeds exponent precision (${numZerosToAdd}).`);
+        }
+        const paddedFractional = fractionalPart.padEnd(numZerosToAdd, '0');
+        const rawValueString = integerPart + paddedFractional;
+        newPriceRaw = new anchor.BN(rawValueString);
+    } catch (error: any) {
+        updatePriceUpdateStatus(`Invalid price input/calculation: ${error.message || 'Error processing price.'}`, true);
+        console.error(error);
+        return;
+    }
+
+    const mockFeedAddressStr = MOCK_PRICE_FEEDS[selectedSymbol];
+    if (!mockFeedAddressStr) {
+        updatePriceUpdateStatus(`Mock feed address not found for ${selectedSymbol}. Check mockPriceFeeds.json.`, true);
+        return;
+    }
+
+    const mockFeedPublicKey = new PublicKey(mockFeedAddressStr);
+    const programId = new PublicKey(IDL.address); // Get program ID from top-level IDL address
+
+    updatePriceButton.disabled = true;
+    updatePriceUpdateStatus(`Building transaction for ${selectedSymbol} to ${newPriceDisplayStr} (raw: ${newPriceRaw.toString()}, exponent: ${hardcodedExponent})...`);
+    if (feedAccountLinkArea) feedAccountLinkArea.innerHTML = ''; // Clear feed link
+
+    try {
+        const instructionData = buildUpdatePriceInstructionData(newPriceRaw, hardcodedExponent);
+        const accounts: AccountMeta[] = [
+            { pubkey: mockFeedPublicKey, isSigner: false, isWritable: true },
+        ];
+        const instruction = new TransactionInstruction({
+            keys: accounts,
+            programId: programId,
+            data: instructionData,
+        });
+
+        const transaction = new Transaction()
+            .add(ComputeBudgetProgram.setComputeUnitPrice({ microLamports: PRIORITY_FEE }))
+            .add(ComputeBudgetProgram.setComputeUnitLimit({ units: COMPUTE_UNIT_LIMIT }))
+            .add(instruction);
+
+        updatePriceUpdateStatus(`Sending transaction for ${selectedSymbol}...`);
+
+        const signature = await sendAndConfirmTransaction(
+            connection,
+            transaction,
+            mintAuthority // Use mintAuthority as payer
+        );
+
+        updatePriceUpdateStatus(`Successfully updated price for ${selectedSymbol}!`);
+        showPriceUpdateTransactionLinks(signature);
+        showPriceFeedAccountLink(mockFeedPublicKey.toBase58());
+
+    } catch (error: any) {
+        updatePriceUpdateStatus(`Update failed: ${error.message || error}`, true);
+        console.error('Price update error:', error);
+    } finally {
+        updatePriceButton.disabled = false;
+    }
+}
 
 /**
  * Initialize the faucet script.
  */
 async function initialize() {
+    // Initial status update split
     updateStatus('Initializing...');
+    updatePriceUpdateStatus('Initializing...');
 
     // Validate embedded key
     if (MINT_AUTHORITY_SECRET_KEY.length !== 64) {
-        updateStatus('ERROR: Invalid MINT_AUTHORITY_SECRET_KEY length. Paste the 64-byte array.', true);
+        const errorMsg = 'ERROR: Invalid MINT_AUTHORITY_SECRET_KEY length. Paste the 64-byte array.';
+        updateStatus(errorMsg, true);
+        updatePriceUpdateStatus(errorMsg, true);
         return;
     }
-    // Check if placeholder key is still there (very basic check)
     if (MINT_AUTHORITY_SECRET_KEY[0] === 1 && MINT_AUTHORITY_SECRET_KEY[1] === 2 && MINT_AUTHORITY_SECRET_KEY[2] === 3) {
-        updateStatus('ERROR: Placeholder MINT_AUTHORITY_SECRET_KEY found. Paste your actual key.', true);
+        const errorMsg = 'ERROR: Placeholder MINT_AUTHORITY_SECRET_KEY found. Paste your actual key.';
+        updateStatus(errorMsg, true);
+        updatePriceUpdateStatus(errorMsg, true);
         return;
     }
 
     try {
-        // Determine cluster info early
         currentClusterInfo = getClusterInfo();
         console.log('Cluster Info:', currentClusterInfo);
 
         mintAuthority = Keypair.fromSecretKey(MINT_AUTHORITY_SECRET_KEY);
-        console.log('Mint Authority:', mintAuthority.publicKey.toBase58());
+        console.log('Authority/Payer Key:', mintAuthority.publicKey.toBase58());
 
         connection = new Connection(RPC_ENDPOINT, 'confirmed');
         console.log('Connected to:', RPC_ENDPOINT);
-        await connection.getVersion(); // Test connection
+        await connection.getVersion();
         console.log('Connection successful.');
 
-        // --- Removed Anchor Setup ---
-        // const wallet = new KeypairWallet(mintAuthority);
-        // provider = new anchor.AnchorProvider(connection, wallet, { commitment: "confirmed" });
-        // anchor.setProvider(provider);
-        // const programId = new PublicKey("rYhXyYZMT5jDnd3UyXBhi8qvJfmbaZ53sFVV3tP1t4W");
-        // console.log(`Attempting to fetch IDL for Program ID: ${programId.toBase58()}`);
-        // const fetchedIdl = await anchor.Program.fetchIdl(programId, provider);
-        // if (!fetchedIdl) {
-        //     throw new Error(`Could not fetch IDL for program ${programId.toBase58()}. Is the IDL deployed?`);
-        // }
-        // console.log("Successfully fetched IDL from cluster.");
-        // console.log("Fetched IDL content:", JSON.stringify(fetchedIdl, null, 2));
-        // mockPriceFeedProgram = new anchor.Program<MockPriceFeed>(fetchedIdl, programId, provider);
-        // console.log(`Mock Price Feed Program loaded. Program ID: ${mockPriceFeedProgram.programId.toBase58()}`);
-        // --- End Anchor Setup ---
+        // --- Removed Anchor Program Setup ---
 
-        // Data is imported, proceed directly
+        // --- Data Loading ---
         if (Object.keys(MINT_ADDRESSES).length === 0) {
-            // This should ideally not happen if the import worked
-            throw new Error('Mint addresses data is empty after import.');
+             throw new Error('Mint addresses data is empty after import.');
         }
         console.log('Successfully loaded MINT_ADDRESSES via import:', MINT_ADDRESSES);
 
-        // Now populate the dropdown after addresses are loaded
-        populateTokenDropdown();
-        // Removed price feed dropdown population
-        // populatePriceFeedDropdown();
+        // Check and load price feed data
+        if (Object.keys(MOCK_PRICE_FEEDS).length === 0) {
+            // Attempting to load, might be okay if anchor test wasn't run yet. Warn instead of throwing.
+            console.warn('Mock price feed addresses data is empty after import. Ensure `anchor test` was run in mockPriceFeed project.');
+            updatePriceUpdateStatus('Warning: Price feed list empty. Run `anchor test` in mockPriceFeed?', true); // Warn user
+        } else {
+            console.log('Successfully loaded MOCK_PRICE_FEEDS via import:', MOCK_PRICE_FEEDS);
+        }
 
+        // --- Populate Dropdowns ---
+        populateTokenDropdown();
+        populatePriceFeedDropdown(); // Added
+
+        // --- Add Event Listeners ---
         if (mintButton) {
             mintButton.addEventListener('click', handleMint);
         }
-        // Removed listener for the update button
-        // if (updatePriceButton) {
-        //     updatePriceButton.addEventListener('click', handleUpdatePrice);
-        // }
+        // Add listener for the update button
+        if (updatePriceButton) {
+            updatePriceButton.addEventListener('click', handleUpdatePrice); // Added
+        }
 
+        // Final status updates
         updateStatus('Ready. Enter address, select token, and click Mint.');
-        // Removed price update status update
-        // updatePriceUpdateStatus('Ready. Select feed, enter price/exponent, and click Update.');
+        updatePriceUpdateStatus('Ready. Select feed, enter price, and click Update.'); // Updated
 
     } catch (error: any) {
-        updateStatus(`Initialization failed: ${error.message || error}`, true);
+        const errorMsg = `Initialization failed: ${error.message || error}`;
+        updateStatus(errorMsg, true);
+        updatePriceUpdateStatus(errorMsg, true); // Show error in both sections
         console.error('Initialization error:', error);
     }
 }
 
 // --- Run Initialization ---
-document.addEventListener('DOMContentLoaded', initialize); 
+document.addEventListener('DOMContentLoaded', initialize);

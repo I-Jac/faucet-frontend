@@ -5,66 +5,79 @@
     <link rel="icon" type="image/svg+xml" href="/faucet-frontend/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dev SPL Token Faucet</title>
-    <script type="module" crossorigin src="/faucet-frontend/assets/index-D5z_nNfa.js"></script>
-    <link rel="stylesheet" crossorigin href="/faucet-frontend/assets/index-CVpHTxma.css">
+    <script type="module" crossorigin src="/faucet-frontend/assets/index-DHETaYH8.js"></script>
+    <link rel="stylesheet" crossorigin href="/faucet-frontend/assets/index-Dat47kNI.css">
   </head>
   <body>
     <div id="app">
       <h1>Dev SPL Token Faucet</h1>
-
-      <!-- Minting Section Container -->
-      <div class="section-container" id="mint-section">
+      <div class="card">
         <h2>Mint Tokens</h2>
-        <div class="card">
+        <div class="form-group">
           <label for="recipient-address">Recipient Address:</label>
           <input type="text" id="recipient-address" placeholder="Enter Solana address" size="50" />
         </div>
-        <div class="card">
-          <label for="token-select">Token:</label>
+        <div class="form-group">
+          <label for="token-select">Select Single Token:</label>
           <select id="token-select">
             <option value="">-- Select Token --</option>
             <!-- Options will be populated by script -->
           </select>
         </div>
-        <div class="card">
+        <div class="form-group checkbox-group">
+          <input type="checkbox" id="mint-all-checkbox" />
+          <label for="mint-all-checkbox">Mint All Tokens</label>
+        </div>
+        <div class="form-group">
           <label for="mint-amount">Amount:</label>
           <input type="number" id="mint-amount" value="10" min="1" step="1"/>
           <!-- Note: Max amount depends on selected token decimals -->
         </div>
-        <div class="card">
-           <button id="mint-button" type="button">Mint Tokens</button>
-        </div>
-        <div id="status-area">
-          <p id="status-message">Status: Idle</p>
-          <p id="tx-signature"></p>
-          <div id="recipient-links-area" class="links-area"></div>
-        </div>
-      </div> <!-- End Minting Section -->
+        <button id="mint-button" type="button">Mint Tokens</button>
+        <p id="status-message">Status: Idle</p>
+        <p id="tx-signature"></p>
+        <div id="recipient-links-area" class="links-area"></div>
+      </div>
 
-      <!-- Price Update Section Container -->
-      <div class="section-container" id="price-update-section">
+      <!-- New Section for Updating Mock Price Feeds -->
+      <div class="card">
         <h2>Update Mock Price Feed</h2>
-        <div class="card">
+        <div class="form-group">
           <label for="price-feed-select">Symbol:</label>
           <select id="price-feed-select">
             <option value="">-- Loading Feeds --</option>
-            <!-- Options will be populated by script -->
           </select>
         </div>
-        <div class="card">
+        <div class="form-group input-with-button">
           <label for="new-price">Set Price:</label>
-          <input type="number" id="new-price" placeholder="e.g., 150.00" step="any" />
+          <input type="text" id="new-price" placeholder="e.g., 150.00" />
           <small>Input dollar value</small>
         </div>
-        <div class="card">
-           <button id="update-price-button" type="button">Update Price</button>
+        <button id="update-price-button" type="button">Update Price</button>
+        <p id="update-status-message">Status: Waiting for input...</p>
+        <p id="update-tx-signature"></p>
+        <div id="feed-account-link-area" class="links-area"></div>
+      </div>
+      <!-- End New Section -->
+
+      <!-- Added Price Table Section -->
+      <div class="card">
+        <h2>Current Prices & Percentage Updates</h2>
+        
+        <!-- Added Bulk Update Row -->
+        <div class="form-group bulk-update-row"> 
+          <label for="bulk-percentage-input">Apply % Change to All:</label>
+          <input type="number" id="bulk-percentage-input" placeholder="+/-%" step="any" />
+          <button type="button" id="bulk-update-button">Update All</button>
         </div>
-        <div id="update-status-area">
-          <p id="update-status-message">Status: Waiting for input...</p>
-          <p id="update-tx-signature"></p>
-           <div id="feed-account-link-area" class="links-area"></div>
+        <!-- End Bulk Update Row -->
+        
+        <div id="price-table-status">Loading prices...</div>
+        <div id="price-table-container"> 
+          <!-- Table rows will be dynamically inserted here -->
         </div>
-      </div> <!-- End Price Update Section -->
+      </div>
+      <!-- End Price Table Section -->
 
     </div>
   </body>

@@ -16,6 +16,7 @@ import {
     ASSOCIATED_TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
 import * as anchor from "@coral-xyz/anchor";
+import AutoNumeric from 'autonumeric';
 
 // Import the mock price feed program IDL type and program ID
 import IDL from './mock_price_feed.json';
@@ -82,6 +83,9 @@ const updatePriceButton = document.getElementById('update-price-button') as HTML
 const updateStatusMessageEl = document.getElementById('update-status-message') as HTMLParagraphElement; // Dedicated status for price updates
 const updateTxSignatureEl = document.getElementById('update-tx-signature') as HTMLParagraphElement; // Dedicated TX link for price updates
 const feedAccountLinkArea = document.getElementById('feed-account-link-area') as HTMLDivElement; // Dedicated link area for feed account
+
+// Global reference for the AutoNumeric instance
+let priceInputAutoNumeric: AutoNumeric | null = null;
 
 /**
  * Update the MINTING status display and clear minting links.
@@ -443,35 +447,38 @@ async function handleMint() {
 }
 
 /**
- * Handle the update price button click. Added
+ * Handle the update price button click. Use AutoNumeric getter.
  */
 async function handleUpdatePrice() {
-    if (!connection || !mintAuthority || !priceFeedSelect || !newPriceInput || !updatePriceButton) {
-        updatePriceUpdateStatus('Initialization error. Check console.', true);
+    if (!connection || !mintAuthority || !priceFeedSelect || !newPriceInput || !updatePriceButton || !priceInputAutoNumeric) {
+        updatePriceUpdateStatus('Initialization error (AutoNumeric). Check console.', true);
         return;
     }
 
     const selectedSymbol = priceFeedSelect.value;
-    const newPriceDisplayStr = newPriceInput.value.trim();
+    
+    // --- Get the numeric value directly from AutoNumeric --- 
+    const priceNum = priceInputAutoNumeric.getNumber(); // Use AutoNumeric's method
 
     if (!selectedSymbol) {
         updatePriceUpdateStatus('Please select a price feed symbol.', true);
         return;
     }
 
-    if (!newPriceDisplayStr) {
-        updatePriceUpdateStatus('Please enter a new price.', true);
-        return;
+    // AutoNumeric handles minimumValue, but check if it's null/undefined or somehow still invalid
+    if (priceNum === null || typeof priceNum === 'undefined' || priceNum < 0) { 
+        updatePriceUpdateStatus('Please enter a valid non-negative price.', true);
+        return; 
     }
+    // --- End value retrieval and validation ---
 
     let newPriceRaw: anchor.BN;
     const hardcodedExponent = PRICE_EXPONENT;
+    const displayPriceStr = String(priceNum); // For calculation, use the number obtained
 
     try {
-        if (isNaN(parseFloat(newPriceDisplayStr))) {
-            throw new Error("Invalid number format for price.");
-        }
-        const parts = newPriceDisplayStr.split('.');
+        // Calculation logic uses the number obtained from AutoNumeric
+        const parts = displayPriceStr.split('.'); 
         const integerPart = parts[0];
         const fractionalPart = parts[1] || '';
         const numZerosToAdd = Math.abs(hardcodedExponent);
@@ -479,13 +486,17 @@ async function handleUpdatePrice() {
             throw new Error(`Input precision (${fractionalPart.length} decimals) exceeds exponent precision (${numZerosToAdd}).`);
         }
         const paddedFractional = fractionalPart.padEnd(numZerosToAdd, '0');
-        const rawValueString = integerPart + paddedFractional;
+        const rawValueString = integerPart + paddedFractional; 
         newPriceRaw = new anchor.BN(rawValueString);
+
     } catch (error: any) {
         updatePriceUpdateStatus(`Invalid price input/calculation: ${error.message || 'Error processing price.'}`, true);
         console.error(error);
         return;
     }
+
+    // Get the formatted string for the status message
+    const formattedDisplayPrice = priceInputAutoNumeric.getFormatted();
 
     const mockFeedAddressStr = MOCK_PRICE_FEEDS[selectedSymbol];
     if (!mockFeedAddressStr) {
@@ -494,11 +505,11 @@ async function handleUpdatePrice() {
     }
 
     const mockFeedPublicKey = new PublicKey(mockFeedAddressStr);
-    const programId = new PublicKey(IDL.address); // Get program ID from top-level IDL address
+    const programId = new PublicKey(IDL.address); 
 
     updatePriceButton.disabled = true;
-    updatePriceUpdateStatus(`Building transaction for ${selectedSymbol} to ${newPriceDisplayStr} (raw: ${newPriceRaw.toString()}, exponent: ${hardcodedExponent})...`);
-    if (feedAccountLinkArea) feedAccountLinkArea.innerHTML = ''; // Clear feed link
+    updatePriceUpdateStatus(`Building transaction for ${selectedSymbol} to ${formattedDisplayPrice} (raw: ${newPriceRaw.toString()}, exponent: ${hardcodedExponent})...`);
+    if (feedAccountLinkArea) feedAccountLinkArea.innerHTML = ''; 
 
     try {
         const instructionData = buildUpdatePriceInstructionData(newPriceRaw, hardcodedExponent);
@@ -521,10 +532,11 @@ async function handleUpdatePrice() {
         const signature = await sendAndConfirmTransaction(
             connection,
             transaction,
-            mintAuthority // Use mintAuthority as payer
+            mintAuthority 
         );
 
         updatePriceUpdateStatus(`Successfully updated price for ${selectedSymbol}!`);
+        // No need to manually format input here, AutoNumeric handles it
         showPriceUpdateTransactionLinks(signature);
         showPriceFeedAccountLink(mockFeedPublicKey.toBase58());
 
@@ -589,25 +601,43 @@ async function initialize() {
 
         // --- Populate Dropdowns ---
         populateTokenDropdown();
-        populatePriceFeedDropdown(); // Added
+        populatePriceFeedDropdown();
 
-        // --- Add Event Listeners ---
+        // --- Initialize AutoNumeric --- 
+        if (newPriceInput) {
+            // Ensure the input type is text or tel for best AutoNumeric compatibility
+            // Although it works with number, text is often recommended.
+            // newPriceInput.type = 'text'; // Optional: Change type if needed
+            
+            priceInputAutoNumeric = new AutoNumeric(newPriceInput, {
+                digitGroupSeparator: ' ',       // Use space for thousands
+                decimalCharacter: '.',         // Use dot for decimal
+                decimalPlaces: 8,             // Allow up to 8 decimal places (adjust if needed)
+                minimumValue: '0',            // Disallow negative numbers
+                // watchExternalChanges: false, // Might prevent conflicts, default is false
+            });
+            console.log('AutoNumeric initialized on price input.');
+        } else {
+            console.error('Price input element not found for AutoNumeric.');
+             updatePriceUpdateStatus('Initialization error: Price input field missing.', true);
+        }
+
+        // --- Add Event Listeners (excluding focus/blur for price input) ---
         if (mintButton) {
             mintButton.addEventListener('click', handleMint);
         }
-        // Add listener for the update button
         if (updatePriceButton) {
-            updatePriceButton.addEventListener('click', handleUpdatePrice); // Added
+            updatePriceButton.addEventListener('click', handleUpdatePrice);
         }
 
         // Final status updates
         updateStatus('Ready. Enter address, select token, and click Mint.');
-        updatePriceUpdateStatus('Ready. Select feed, enter price, and click Update.'); // Updated
+        updatePriceUpdateStatus('Ready. Select feed, enter price, and click Update.');
 
     } catch (error: any) {
-        const errorMsg = `Initialization failed: ${error.message || error}`;
+         const errorMsg = `Initialization failed: ${error.message || error}`;
         updateStatus(errorMsg, true);
-        updatePriceUpdateStatus(errorMsg, true); // Show error in both sections
+        updatePriceUpdateStatus(errorMsg, true);
         console.error('Initialization error:', error);
     }
 }

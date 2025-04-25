@@ -6,9 +6,18 @@ import {
     TOKEN_PROGRAM_ID,
     ASSOCIATED_TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
+// import * as anchor from "@coral-xyz/anchor"; // Removed Anchor import
+// Remove the explicit Wallet import
+
+// Import the mock price feed program IDL type and program ID
+// Adjust the path based on your project structure relative to faucet-frontend
+// import { MockPriceFeed } from './mock_price_feed'; // Removed Type import
+// import IDL from './mock_price_feed.json'; // Removed IDL import
 
 // Import the mint addresses data directly (Vite handles JSON imports)
 import MINT_ADDRESSES_DATA from './mint-addresses.json';
+// Import the mock price feed data (Vite handles JSON imports)
+// import MOCK_PRICE_FEEDS_DATA from './mockPriceFeeds.json'; // Removed price feed import
 
 // --- Configuration --- > PASTE YOUR DATA HERE < ---
 
@@ -24,16 +33,51 @@ const MINT_AUTHORITY_SECRET_KEY = new Uint8Array([108,33,192,134,193,113,214,240
 
 // Assign imported data directly (Type assertion might be needed depending on TS config)
 const MINT_ADDRESSES: { [symbol: string]: string } = MINT_ADDRESSES_DATA as { [symbol: string]: string };
+// Assign imported price feed data
+// const MOCK_PRICE_FEEDS: { [symbol: string]: string } = MOCK_PRICE_FEEDS_DATA as { [symbol: string]: string }; // Removed
 
 // 3. Configure your RPC Endpoint (localhost, devnet, etc.)
 const RPC_ENDPOINT = 'http://127.0.0.1:8900'; // Use port 8900
 
 // --- End Configuration ---
 
+// --- Simple Wallet Implementation for Keypair ---
+// This might be needed if we were using Anchor Provider, but not needed for direct SPL calls. Can be removed if unused later.
+// class KeypairWallet implements anchor.Wallet {
+//     constructor(readonly keypair: Keypair) {}
+//
+//     async signTransaction<T extends Transaction | VersionedTransaction>(tx: T): Promise<T> {
+//         if (tx instanceof VersionedTransaction) {
+//             tx.sign([this.keypair]);
+//         } else { // Legacy Transaction
+//             tx.partialSign(this.keypair);
+//         }
+//         return tx;
+//     }
+//
+//     async signAllTransactions<T extends Transaction | VersionedTransaction>(txs: T[]): Promise<T[]> {
+//         return txs.map((t) => {
+//             if (t instanceof VersionedTransaction) {
+//                 t.sign([this.keypair]);
+//             } else { // Legacy Transaction
+//                  t.partialSign(this.keypair);
+//             }
+//             return t;
+//         });
+//     }
+//
+//     get publicKey(): PublicKey {
+//         return this.keypair.publicKey;
+//     }
+// }
+// ---------------------------------------------
+
 // Globals
 let connection: Connection;
 let mintAuthority: Keypair;
 let currentClusterInfo: ClusterInfo; // Store cluster info globally
+// let provider: anchor.AnchorProvider; // Removed Anchor provider
+// let mockPriceFeedProgram: anchor.Program<MockPriceFeed>; // Removed program instance
 
 // Interface for cluster information
 interface ClusterInfo {
@@ -49,6 +93,13 @@ const mintButton = document.getElementById('mint-button') as HTMLButtonElement;
 const statusMessageEl = document.getElementById('status-message') as HTMLParagraphElement;
 const txSignatureEl = document.getElementById('tx-signature') as HTMLParagraphElement;
 const recipientLinksArea = document.getElementById('recipient-links-area') as HTMLDivElement;
+
+// --- Removed UI Elements for Price Update ---
+// const priceFeedSelect = document.getElementById('price-feed-select') as HTMLSelectElement;
+// const newPriceInput = document.getElementById('new-price') as HTMLInputElement;
+// const updatePriceButton = document.getElementById('update-price-button') as HTMLButtonElement;
+// const updateStatusMessageEl = document.getElementById('update-status-message') as HTMLParagraphElement;
+// const updateTxSignatureEl = document.getElementById('update-tx-signature') as HTMLParagraphElement;
 
 /**
  * Update the status display and clear links.
@@ -145,6 +196,9 @@ function populateTokenDropdown() {
     }
 }
 
+// --- Removed populatePriceFeedDropdown function ---
+// function populatePriceFeedDropdown() { ... }
+
 /**
  * Handle the mint button click.
  */
@@ -221,14 +275,15 @@ async function handleMint() {
 
         updateStatus(`Fetching/creating token account for recipient...`);
 
+        // Use mintAuthority Keypair directly, no need for Wallet wrapper if not using Anchor Provider
         const recipientTokenAccount = await getOrCreateAssociatedTokenAccount(
             connection,
-            mintAuthority,
+            mintAuthority, // Payer for creation is the mint authority
             mintPublicKey,
             recipientPublicKey,
-            false,
-            'confirmed',
-            undefined,
+            false, // Allow owner off curve (not relevant here)
+            'confirmed', // Commitment level
+            undefined, // Confirm options
             TOKEN_PROGRAM_ID,
             ASSOCIATED_TOKEN_PROGRAM_ID
         );
@@ -236,15 +291,16 @@ async function handleMint() {
         // Update status message with raw amount
         updateStatus(`Minting ${amountToMint} (raw) tokens...`);
 
+        // Use mintAuthority Keypair directly
         const signature = await mintTo(
             connection,
-            mintAuthority,
+            mintAuthority, // Payer for the mint fee is the mint authority
             mintPublicKey,
             recipientTokenAccount.address,
-            mintAuthority,
+            mintAuthority, // Mint authority signer
             amountToMint, // Use validated & scaled amount
-            [],
-            { commitment: 'confirmed' },
+            [], // Multi-signers (none needed here)
+            { commitment: 'confirmed' }, // Confirm options
             TOKEN_PROGRAM_ID
         );
 
@@ -260,6 +316,14 @@ async function handleMint() {
         mintButton.disabled = false;
     }
 }
+
+// --- Removed handleUpdatePrice function ---
+// async function handleUpdatePrice() { ... }
+
+// --- Removed Price Update status functions ---
+// function updatePriceUpdateStatus(message: string, isError = false) { ... }
+// function showPriceUpdateTransactionLinks(signature: string) { ... }
+// function showPriceFeedAccountLink(address: string) { ... }
 
 /**
  * Initialize the faucet script.
@@ -277,11 +341,6 @@ async function initialize() {
         updateStatus('ERROR: Placeholder MINT_AUTHORITY_SECRET_KEY found. Paste your actual key.', true);
         return;
     }
-    // // Check if mint addresses are empty or placeholder // <-- REMOVE this check as it will be empty initially
-    // if (Object.keys(MINT_ADDRESSES).length === 0 || MINT_ADDRESSES["BTC"]?.startsWith('Your')) {
-    //     updateStatus('ERROR: Placeholder or empty MINT_ADDRESSES found. Paste your actual mint addresses object.', true);
-    //     return;
-    // }
 
     try {
         // Determine cluster info early
@@ -296,21 +355,45 @@ async function initialize() {
         await connection.getVersion(); // Test connection
         console.log('Connection successful.');
 
+        // --- Removed Anchor Setup ---
+        // const wallet = new KeypairWallet(mintAuthority);
+        // provider = new anchor.AnchorProvider(connection, wallet, { commitment: "confirmed" });
+        // anchor.setProvider(provider);
+        // const programId = new PublicKey("rYhXyYZMT5jDnd3UyXBhi8qvJfmbaZ53sFVV3tP1t4W");
+        // console.log(`Attempting to fetch IDL for Program ID: ${programId.toBase58()}`);
+        // const fetchedIdl = await anchor.Program.fetchIdl(programId, provider);
+        // if (!fetchedIdl) {
+        //     throw new Error(`Could not fetch IDL for program ${programId.toBase58()}. Is the IDL deployed?`);
+        // }
+        // console.log("Successfully fetched IDL from cluster.");
+        // console.log("Fetched IDL content:", JSON.stringify(fetchedIdl, null, 2));
+        // mockPriceFeedProgram = new anchor.Program<MockPriceFeed>(fetchedIdl, programId, provider);
+        // console.log(`Mock Price Feed Program loaded. Program ID: ${mockPriceFeedProgram.programId.toBase58()}`);
+        // --- End Anchor Setup ---
+
         // Data is imported, proceed directly
         if (Object.keys(MINT_ADDRESSES).length === 0) {
             // This should ideally not happen if the import worked
-            throw new Error('Mint addresses data is empty after import.'); 
+            throw new Error('Mint addresses data is empty after import.');
         }
         console.log('Successfully loaded MINT_ADDRESSES via import:', MINT_ADDRESSES);
 
         // Now populate the dropdown after addresses are loaded
         populateTokenDropdown();
+        // Removed price feed dropdown population
+        // populatePriceFeedDropdown();
 
         if (mintButton) {
             mintButton.addEventListener('click', handleMint);
         }
+        // Removed listener for the update button
+        // if (updatePriceButton) {
+        //     updatePriceButton.addEventListener('click', handleUpdatePrice);
+        // }
 
         updateStatus('Ready. Enter address, select token, and click Mint.');
+        // Removed price update status update
+        // updatePriceUpdateStatus('Ready. Select feed, enter price/exponent, and click Update.');
 
     } catch (error: any) {
         updateStatus(`Initialization failed: ${error.message || error}`, true);

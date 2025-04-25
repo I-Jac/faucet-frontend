@@ -57,6 +57,10 @@ h1 {
 
 .card {
   padding: 2em;
+  border: 1px solid #444;
+  border-radius: 8px;
+  margin-bottom: 2em;
+  background-color: #2a2a2a;
 }
 
 .read-the-docs {
@@ -82,6 +86,57 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/* Style for form elements */
+.form-group {
+    margin-bottom: 1em;
+    text-align: left;
+}
+
+label {
+    display: block;
+    margin-bottom: 0.3em;
+    font-weight: bold;
+}
+
+input[type="text"],
+input[type="number"],
+select {
+    width: 95%;
+    padding: 0.6em;
+    border-radius: 4px;
+    border: 1px solid #555;
+    background-color: #333;
+    color: inherit;
+    font-size: 1em;
+    margin-top: 0.2em;
+}
+
+input::placeholder {
+    color: #888;
+}
+
+/* Status and link styling */
+#status-message,
+#update-status-message {
+    margin-top: 1em;
+    font-style: italic;
+}
+
+#tx-signature a,
+#update-tx-signature a,
+.links-area a {
+    word-break: break-all;
+}
+
+.links-area {
+    margin-top: 0.5em;
+}
+
+.error {
+    color: #ff6b6b;
+    font-weight: bold;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;
@@ -92,5 +147,18 @@ button:focus-visible {
   }
   button {
     background-color: #f9f9f9;
+  }
+  .card {
+    background-color: #f0f0f0;
+    border-color: #ccc;
+  }
+  input[type="text"],
+  input[type="number"],
+  select {
+      background-color: #fff;
+      border-color: #ccc;
+  }
+  input::placeholder {
+      color: #aaa;
   }
 }

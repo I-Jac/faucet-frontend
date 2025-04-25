@@ -92,6 +92,25 @@ button:focus-visible {
     text-align: left;
 }
 
+/* Specific style for checkbox group layout */
+.checkbox-group {
+    display: flex; /* Use flexbox for inline layout */
+    align-items: center; /* Vertically align items */
+    gap: 0.5em; /* Add a small gap between checkbox and label */
+}
+
+/* Adjustments for items within checkbox-group */
+.checkbox-group input[type="checkbox"] {
+    /* Remove default block behavior or width if needed */
+    width: auto; /* Let it size naturally */
+    margin: 0; /* Remove extra margins if any */
+}
+
+.checkbox-group label {
+    display: inline; /* Make label inline */
+    margin: 0; /* Remove extra margins */
+}
+
 label {
     display: block;
     margin-bottom: 0.3em;

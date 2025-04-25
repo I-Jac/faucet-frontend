@@ -72,6 +72,7 @@ const recipientInput = document.getElementById('recipient-address') as HTMLInput
 const tokenSelect = document.getElementById('token-select') as HTMLSelectElement;
 const amountInput = document.getElementById('mint-amount') as HTMLInputElement;
 const mintButton = document.getElementById('mint-button') as HTMLButtonElement;
+const mintAllCheckbox = document.getElementById('mint-all-checkbox') as HTMLInputElement;
 const statusMessageEl = document.getElementById('status-message') as HTMLParagraphElement; // For minting status
 const txSignatureEl = document.getElementById('tx-signature') as HTMLParagraphElement; // For minting TX
 const recipientLinksArea = document.getElementById('recipient-links-area') as HTMLDivElement;
@@ -195,10 +196,9 @@ function showPriceFeedAccountLink(address: string) {
 function populateTokenDropdown() {
     if (!tokenSelect) return;
     tokenSelect.innerHTML = '<option value="">-- Select Token --</option>'; // Clear existing
-
+    
     if (Object.keys(MINT_ADDRESSES).length === 0) {
         console.warn('MINT_ADDRESSES not populated yet for dropdown.');
-        updateStatus('Error: Token list not loaded. Check console.', true);
         return;
     }
 
@@ -329,14 +329,13 @@ async function sendAndConfirmTransaction(
 // --- End Utility Functions ---
 
 /**
- * Handle the mint button click.
+ * Handle the mint button click (Single Token).
  */
 async function handleMint() {
     if (!connection || !mintAuthority || !recipientInput || !tokenSelect || !amountInput || !mintButton) {
         updateStatus('Initialization error. Check console.', true);
         return;
     }
-
     const recipientAddressStr = recipientInput.value.trim();
     const selectedSymbol = tokenSelect.value;
     const amountStr = amountInput.value.trim();
@@ -347,7 +346,7 @@ async function handleMint() {
     }
 
     if (!selectedSymbol) {
-        updateStatus('Please select a token.', true);
+        updateStatus('Please select a token to mint.', true);
         return;
     }
 
@@ -376,19 +375,18 @@ async function handleMint() {
     mintButton.disabled = true;
     updateStatus(`Minting ${amountStr} ${selectedSymbol} to ${recipientAddressStr}...`);
     if (recipientLinksArea) recipientLinksArea.innerHTML = '';
+    if (txSignatureEl) txSignatureEl.innerHTML = '';
 
     try {
-        // Need to get mint info to know decimals
         const mintInfo = await connection.getParsedAccountInfo(mintPublicKey);
         if (!mintInfo || !mintInfo.value || !('parsed' in mintInfo.value.data)) {
             throw new Error('Could not fetch mint info or data is not parsed');
         }
         const decimals = mintInfo.value.data.parsed.info.decimals;
 
-        // --- Overflow Validation based on Decimals ---
         const scale = 10n ** BigInt(decimals);
-        const u64Max = 18446744073709551615n; // Max value for u64
-        const maxSafeDisplayAmount = u64Max / scale; // Integer division gives max whole tokens
+        const u64Max = 18446744073709551615n; 
+        const maxSafeDisplayAmount = u64Max / scale;
 
         const userAmountDisplay = parseInt(amountStr, 10);
         if (isNaN(userAmountDisplay) || userAmountDisplay <= 0) {
@@ -396,54 +394,132 @@ async function handleMint() {
         }
 
         if (BigInt(userAmountDisplay) > maxSafeDisplayAmount) {
-             throw new Error(`Amount too large for ${decimals} decimals. Maximum allowed: ${maxSafeDisplayAmount}`);
+             throw new Error(`Amount too large for ${decimals} decimals. Max: ${maxSafeDisplayAmount}`);
         }
-        // --- End Overflow Validation ---
-
+        
         const amountToMint = BigInt(userAmountDisplay) * scale;
 
-        updateStatus(`Fetching/creating token account for recipient...`);
+        updateStatus(`Fetching/creating token account for ${selectedSymbol}...`);
 
-        // Use mintAuthority Keypair directly, no need for Wallet wrapper if not using Anchor Provider
         const recipientTokenAccount = await getOrCreateAssociatedTokenAccount(
-            connection,
-            mintAuthority, // Payer for creation is the mint authority
-            mintPublicKey,
-            recipientPublicKey,
-            false, // Allow owner off curve (not relevant here)
-            'confirmed', // Commitment level
-            undefined, // Confirm options
-            TOKEN_PROGRAM_ID,
-            ASSOCIATED_TOKEN_PROGRAM_ID
+            connection, mintAuthority, mintPublicKey, recipientPublicKey, false,
+            'confirmed', undefined, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
         );
 
-        // Update status message with raw amount
-        updateStatus(`Minting ${amountToMint} (raw) tokens...`);
+        updateStatus(`Minting ${amountToMint} (raw) ${selectedSymbol}...`);
 
-        // Use mintAuthority Keypair directly
         const signature = await mintTo(
-            connection,
-            mintAuthority, // Payer for the mint fee is the mint authority
-            mintPublicKey,
-            recipientTokenAccount.address,
-            mintAuthority, // Mint authority signer
-            amountToMint, // Use validated & scaled amount
-            [], // Multi-signers (none needed here)
-            { commitment: 'confirmed' }, // Confirm options
-            TOKEN_PROGRAM_ID
+            connection, mintAuthority, mintPublicKey, recipientTokenAccount.address,
+            mintAuthority, amountToMint, [], { commitment: 'confirmed' }, TOKEN_PROGRAM_ID
         );
 
-        // Update final status message with the amount
         updateStatus(`Successfully minted ${userAmountDisplay} ${selectedSymbol}!`);
         showTransactionLinks(signature);
         showRecipientLinks(recipientAddressStr);
 
     } catch (error: any) {
-        updateStatus(`Minting failed: ${error.message || error}`, true);
-        console.error('Minting error:', error);
+        updateStatus(`Minting ${selectedSymbol} failed: ${error.message || error}`, true);
+        console.error(`Minting error (${selectedSymbol}):`, error);
     } finally {
         mintButton.disabled = false;
     }
+}
+
+/**
+ * Handle the mint all button click.
+ */
+async function handleMintAll() {
+    if (!connection || !mintAuthority || !recipientInput || !amountInput || !mintButton) {
+        updateStatus('Initialization error. Check console.', true);
+        return;
+    }
+    const recipientAddressStr = recipientInput.value.trim();
+    const amountStr = amountInput.value.trim();
+
+    if (!recipientAddressStr) {
+        updateStatus('Please enter a recipient address.', true);
+        return;
+    }
+
+    if (!amountStr) {
+        updateStatus('Please enter an amount to mint.', true);
+        return;
+    }
+
+    let recipientPublicKey: PublicKey;
+    try {
+        recipientPublicKey = new PublicKey(recipientAddressStr);
+    } catch (error) {
+        updateStatus('Invalid recipient address.', true);
+        console.error(error);
+        return;
+    }
+
+    mintButton.disabled = true;
+    if (txSignatureEl) txSignatureEl.innerHTML = '';
+    updateStatus(`Starting bulk mint of ${amountStr} for each token...`);
+    showRecipientLinks(recipientAddressStr);
+
+    const userAmountDisplay = parseInt(amountStr, 10);
+    if (isNaN(userAmountDisplay) || userAmountDisplay <= 0) {
+        updateStatus('Please enter a valid positive amount.', true);
+        mintButton.disabled = false;
+        return;
+    }
+
+    const allSymbols = Object.keys(MINT_ADDRESSES).sort();
+    const results = { succeeded: [] as string[], failed: [] as { symbol: string; error: string }[] };
+    let overallStatus = '';
+
+    for (const symbol of allSymbols) {
+        const mintAddressStr = MINT_ADDRESSES[symbol];
+        const mintPublicKey = new PublicKey(mintAddressStr);
+        updateStatus(`Processing ${symbol}...`);
+        
+        try {
+            const mintInfo = await connection.getParsedAccountInfo(mintPublicKey);
+            if (!mintInfo || !mintInfo.value || !('parsed' in mintInfo.value.data)) {
+                throw new Error('Could not fetch mint info');
+            }
+            const decimals = mintInfo.value.data.parsed.info.decimals;
+            const scale = 10n ** BigInt(decimals);
+            const u64Max = 18446744073709551615n; 
+            const maxSafeDisplayAmount = u64Max / scale;
+
+            if (BigInt(userAmountDisplay) > maxSafeDisplayAmount) {
+                throw new Error(`Amount too large for ${decimals} decimals. Max: ${maxSafeDisplayAmount}`);
+            }
+            const amountToMint = BigInt(userAmountDisplay) * scale;
+
+            updateStatus(`Fetching/creating token account for ${symbol}...`);
+            const recipientTokenAccount = await getOrCreateAssociatedTokenAccount(
+                connection, mintAuthority, mintPublicKey, recipientPublicKey, false,
+                'confirmed', undefined, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID
+            );
+
+            updateStatus(`Minting ${amountToMint} (raw) ${symbol}...`);
+            const signature = await mintTo(
+                connection, mintAuthority, mintPublicKey, recipientTokenAccount.address,
+                mintAuthority, amountToMint, [], { commitment: 'confirmed' }, TOKEN_PROGRAM_ID
+            );
+            console.log(`Minted ${symbol}, Tx: ${signature}`);
+            results.succeeded.push(symbol);
+
+        } catch (error: any) {
+            const errorMsg = error.message || String(error);
+            console.error(`Failed to mint ${symbol}:`, error);
+            results.failed.push({ symbol, error: errorMsg });
+        }
+         await sleep(500);
+    }
+
+    overallStatus = `Bulk Mint Complete. Success: ${results.succeeded.length}. Failed: ${results.failed.length}.`;
+    if (results.failed.length > 0) {
+        overallStatus += ` Failures: ${results.failed.map(f => `${f.symbol} (${f.error.substring(0, 30)}...)`).join(', ')}`;
+    }
+    updateStatus(overallStatus, results.failed.length > 0);
+
+    mintButton.disabled = false;
 }
 
 /**
@@ -457,27 +533,23 @@ async function handleUpdatePrice() {
 
     const selectedSymbol = priceFeedSelect.value;
     
-    // --- Get the numeric value directly from AutoNumeric --- 
-    const priceNum = priceInputAutoNumeric.getNumber(); // Use AutoNumeric's method
+    const priceNum = priceInputAutoNumeric.getNumber();
 
     if (!selectedSymbol) {
         updatePriceUpdateStatus('Please select a price feed symbol.', true);
         return;
     }
 
-    // AutoNumeric handles minimumValue, but check if it's null/undefined or somehow still invalid
     if (priceNum === null || typeof priceNum === 'undefined' || priceNum < 0) { 
         updatePriceUpdateStatus('Please enter a valid non-negative price.', true);
         return; 
     }
-    // --- End value retrieval and validation ---
 
     let newPriceRaw: anchor.BN;
     const hardcodedExponent = PRICE_EXPONENT;
-    const displayPriceStr = String(priceNum); // For calculation, use the number obtained
+    const displayPriceStr = String(priceNum);
 
     try {
-        // Calculation logic uses the number obtained from AutoNumeric
         const parts = displayPriceStr.split('.'); 
         const integerPart = parts[0];
         const fractionalPart = parts[1] || '';
@@ -495,7 +567,6 @@ async function handleUpdatePrice() {
         return;
     }
 
-    // Get the formatted string for the status message
     const formattedDisplayPrice = priceInputAutoNumeric.getFormatted();
 
     const mockFeedAddressStr = MOCK_PRICE_FEEDS[selectedSymbol];
@@ -536,7 +607,6 @@ async function handleUpdatePrice() {
         );
 
         updatePriceUpdateStatus(`Successfully updated price for ${selectedSymbol}!`);
-        // No need to manually format input here, AutoNumeric handles it
         showPriceUpdateTransactionLinks(signature);
         showPriceFeedAccountLink(mockFeedPublicKey.toBase58());
 
@@ -552,11 +622,9 @@ async function handleUpdatePrice() {
  * Initialize the faucet script.
  */
 async function initialize() {
-    // Initial status update split
     updateStatus('Initializing...');
     updatePriceUpdateStatus('Initializing...');
 
-    // Validate embedded key
     if (MINT_AUTHORITY_SECRET_KEY.length !== 64) {
         const errorMsg = 'ERROR: Invalid MINT_AUTHORITY_SECRET_KEY length. Paste the 64-byte array.';
         updateStatus(errorMsg, true);
@@ -582,39 +650,27 @@ async function initialize() {
         await connection.getVersion();
         console.log('Connection successful.');
 
-        // --- Removed Anchor Program Setup ---
-
-        // --- Data Loading ---
         if (Object.keys(MINT_ADDRESSES).length === 0) {
              throw new Error('Mint addresses data is empty after import.');
         }
         console.log('Successfully loaded MINT_ADDRESSES via import:', MINT_ADDRESSES);
 
-        // Check and load price feed data
         if (Object.keys(MOCK_PRICE_FEEDS).length === 0) {
-            // Attempting to load, might be okay if anchor test wasn't run yet. Warn instead of throwing.
             console.warn('Mock price feed addresses data is empty after import. Ensure `anchor test` was run in mockPriceFeed project.');
-            updatePriceUpdateStatus('Warning: Price feed list empty. Run `anchor test` in mockPriceFeed?', true); // Warn user
+            updatePriceUpdateStatus('Warning: Price feed list empty. Run `anchor test` in mockPriceFeed?', true);
         } else {
             console.log('Successfully loaded MOCK_PRICE_FEEDS via import:', MOCK_PRICE_FEEDS);
         }
 
-        // --- Populate Dropdowns ---
         populateTokenDropdown();
         populatePriceFeedDropdown();
 
-        // --- Initialize AutoNumeric --- 
         if (newPriceInput) {
-            // Ensure the input type is text or tel for best AutoNumeric compatibility
-            // Although it works with number, text is often recommended.
-            // newPriceInput.type = 'text'; // Optional: Change type if needed
-            
             priceInputAutoNumeric = new AutoNumeric(newPriceInput, {
-                digitGroupSeparator: ' ',       // Use space for thousands
-                decimalCharacter: '.',         // Use dot for decimal
-                decimalPlaces: 8,             // Allow up to 8 decimal places (adjust if needed)
-                minimumValue: '0',            // Disallow negative numbers
-                // watchExternalChanges: false, // Might prevent conflicts, default is false
+                digitGroupSeparator: ' ',
+                decimalCharacter: '.',
+                decimalPlaces: 8,
+                minimumValue: '0',
             });
             console.log('AutoNumeric initialized on price input.');
         } else {
@@ -622,15 +678,44 @@ async function initialize() {
              updatePriceUpdateStatus('Initialization error: Price input field missing.', true);
         }
 
-        // --- Add Event Listeners (excluding focus/blur for price input) ---
         if (mintButton) {
-            mintButton.addEventListener('click', handleMint);
+            mintButton.addEventListener('click', () => {
+                if (mintAllCheckbox?.checked) {
+                    handleMintAll();
+                } else {
+                    const selectedValue = tokenSelect?.value;
+                    if (selectedValue) {
+                        handleMint();
+                    } else {
+                        updateStatus('Please select a specific token or check "Mint All Tokens Instead".', true);
+                    }
+                }
+            });
         }
         if (updatePriceButton) {
             updatePriceButton.addEventListener('click', handleUpdatePrice);
         }
 
-        // Final status updates
+        // --- Link Checkbox and Dropdown --- Added
+        if (mintAllCheckbox && tokenSelect) {
+            // When checkbox changes
+            mintAllCheckbox.addEventListener('change', () => {
+                if (mintAllCheckbox.checked) {
+                    // If checking the box, reset the dropdown
+                    tokenSelect.value = ''; // Set to the value of "-- Select Token --"
+                }
+            });
+
+            // When dropdown changes
+            tokenSelect.addEventListener('change', () => {
+                if (tokenSelect.value !== '') { // If a specific token is selected
+                    // Uncheck the "Mint All" checkbox
+                    mintAllCheckbox.checked = false;
+                }
+            });
+        }
+        // --- End Link Checkbox and Dropdown ---
+
         updateStatus('Ready. Enter address, select token, and click Mint.');
         updatePriceUpdateStatus('Ready. Select feed, enter price, and click Update.');
 
@@ -642,5 +727,4 @@ async function initialize() {
     }
 }
 
-// --- Run Initialization ---
 document.addEventListener('DOMContentLoaded', initialize);

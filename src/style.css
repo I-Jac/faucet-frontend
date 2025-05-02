@@ -190,7 +190,9 @@ input::placeholder {
 #price-table-container {
     margin-top: 1em;
     display: grid;
-    grid-template-columns: auto 1fr auto auto; /* Symbol, Price, Input, Button */
+    /* Change from 4 columns to 5 columns */
+    /* Symbol, Price, Last Updated, Change %, Action */
+    grid-template-columns: auto auto 1.5fr auto auto; 
     gap: 0.5em 1em; /* Row gap, Column gap */
     align-items: center;
 }
@@ -202,6 +204,28 @@ input::placeholder {
 /* Style elements within the grid */
 #price-table-container span { 
     text-align: right; 
+    /* Ensure timestamp span doesn't cause excessive width */
+    word-break: keep-all; /* Prevent breaking within date/time */
+    white-space: nowrap; /* Prevent wrapping */
+}
+
+/* Adjust specific column alignments if needed */
+#price-table-container > div > span:nth-child(1) { /* Symbol */
+    text-align: left;
+}
+#price-table-container > div > span:nth-child(2) { /* Price */
+    text-align: right;
+}
+#price-table-container > div > span:nth-child(3) { /* Last Updated */
+    text-align: center; /* Center timestamp */
+    font-size: 0.9em; /* Slightly smaller timestamp */
+    color: #ccc; /* Dim timestamp slightly */
+}
+#price-table-container > div > span:nth-child(4) { /* Change % Input container */
+    text-align: center;
+}
+#price-table-container > div > span:nth-child(5) { /* Action Button container */
+    text-align: center;
 }
 
 #price-table-container input[type="number"] {

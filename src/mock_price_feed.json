@@ -21,7 +21,7 @@
       ],
       "accounts": [
         {
-          "name": "mockFeed",
+          "name": "mock_feed",
           "writable": true,
           "pda": {
             "seeds": [
@@ -85,7 +85,7 @@
       ],
       "accounts": [
         {
-          "name": "mockFeed",
+          "name": "mock_feed",
           "writable": true,
           "pda": {
             "seeds": [
@@ -105,7 +105,7 @@
               },
               {
                 "kind": "account",
-                "path": "mockFeed.symbol",
+                "path": "mock_feed.symbol",
                 "account": "MockPriceFeed"
               }
             ]
@@ -133,7 +133,7 @@
       ],
       "accounts": [
         {
-          "name": "mockFeed",
+          "name": "mock_feed",
           "writable": true,
           "pda": {
             "seeds": [
@@ -153,7 +153,7 @@
               },
               {
                 "kind": "account",
-                "path": "mockFeed.symbol",
+                "path": "mock_feed.symbol",
                 "account": "MockPriceFeed"
               }
             ]
@@ -217,8 +217,8 @@
             "type": "u8"
           },
           {
-            "name": "last_updated_slot",
-            "type": "u64"
+            "name": "last_updated_timestamp",
+            "type": "i64"
           },
           {
             "name": "bump",

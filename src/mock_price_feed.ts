@@ -111,7 +111,7 @@ export type MockPriceFeed = {
               },
               {
                 "kind": "account",
-                "path": "mockFeed.symbol",
+                "path": "mock_feed.symbol",
                 "account": "mockPriceFeed"
               }
             ]
@@ -159,7 +159,7 @@ export type MockPriceFeed = {
               },
               {
                 "kind": "account",
-                "path": "mockFeed.symbol",
+                "path": "mock_feed.symbol",
                 "account": "mockPriceFeed"
               }
             ]
@@ -223,8 +223,8 @@ export type MockPriceFeed = {
             "type": "u8"
           },
           {
-            "name": "lastUpdatedSlot",
-            "type": "u64"
+            "name": "lastUpdatedTimestamp",
+            "type": "i64"
           },
           {
             "name": "bump",

@@ -51,8 +51,8 @@ const MINT_ADDRESSES: { [symbol: string]: string } = MINT_ADDRESSES_DATA as { [s
 const MOCK_PRICE_FEEDS: { [symbol: string]: string } = MOCK_PRICE_FEEDS_DATA as { [symbol: string]: string };
 
 // 3. Configure your RPC Endpoint (localhost, devnet, etc.)
-//const RPC_ENDPOINT = 'http://127.0.0.1:8900'; // Use port 8900
-const RPC_ENDPOINT = 'https://api.devnet.solana.com'; // Use devnet
+const RPC_ENDPOINT = 'http://127.0.0.1:8900'; // Use port 8900
+//const RPC_ENDPOINT = 'https://api.devnet.solana.com'; // Use devnet
 
 // --- End Configuration ---
 
@@ -638,6 +638,7 @@ async function handleUpdatePrice() {
 interface ParsedPriceFeed {
     price: anchor.BN;
     exponent: number;
+    lastUpdatedTimestamp?: anchor.BN; // Added timestamp field (optional for safety)
     // Add other fields if needed later, like status
 }
 
@@ -647,23 +648,71 @@ interface ParsedPriceFeed {
  * Field order/types based on mock_price_feed.json IDL.
  */
 function parsePriceFeedData(data: Buffer): ParsedPriceFeed | null {
-    if (!data || data.length < (8 + 8 + 4)) { // Discriminator + i64 + i32
-        console.error("Account data too short or null");
+    // --- Add Debug Logs --- 
+    console.log(`[parsePriceFeedData] Raw buffer length: ${data?.length}`);
+    // --- End Add Debug Logs ---
+
+    // Define base offsets and sizes
+    const DISCRIMINATOR_SIZE = 8;
+    const PRICE_OFFSET = DISCRIMINATOR_SIZE;
+    const PRICE_SIZE = 8; // i64
+    const EXPO_OFFSET = PRICE_OFFSET + PRICE_SIZE;
+    const EXPO_SIZE = 4; // i32
+    const SYMBOL_LENGTH_PREFIX_OFFSET = EXPO_OFFSET + EXPO_SIZE; // Offset to the 4-byte length prefix
+    const SYMBOL_LENGTH_PREFIX_SIZE = 4;
+    // Symbol data follows the prefix
+    // Status and Timestamp offsets depend on the actual symbol length
+
+    // Minimal length check (up to symbol length prefix)
+    const MIN_LEN_BEFORE_SYMBOL_DATA = SYMBOL_LENGTH_PREFIX_OFFSET + SYMBOL_LENGTH_PREFIX_SIZE;
+    if (!data || data.length < MIN_LEN_BEFORE_SYMBOL_DATA) {
+        console.error(`Account data too short to read symbol length. Len: ${data?.length}, Min Required: ${MIN_LEN_BEFORE_SYMBOL_DATA}`);
         return null;
     }
-    try {
-        // Anchor discriminator (8 bytes) - skip
-        const priceOffset = 8;
-        const exponentOffset = 8 + 8; 
 
-        // Price (i64) - read as little-endian BigInt, then convert to BN
-        const priceBigInt = data.readBigInt64LE(priceOffset);
+    try {
+        // --- Dynamically calculate offsets based on actual symbol length --- 
+        const symbolLength = data.readUInt32LE(SYMBOL_LENGTH_PREFIX_OFFSET);
+        const SYMBOL_DATA_OFFSET = SYMBOL_LENGTH_PREFIX_OFFSET + SYMBOL_LENGTH_PREFIX_SIZE;
+        const SYMBOL_ACTUAL_SIZE = symbolLength; // The actual number of bytes used by the symbol string
+
+        const STATUS_OFFSET = SYMBOL_DATA_OFFSET + SYMBOL_ACTUAL_SIZE;
+        const STATUS_SIZE = 1; // u8
+        const TIMESTAMP_OFFSET = STATUS_OFFSET + STATUS_SIZE;
+        const TIMESTAMP_SIZE = 8; // i64
+        // Bump would be after timestamp
+        const BUMP_OFFSET = TIMESTAMP_OFFSET + TIMESTAMP_SIZE;
+        const BUMP_SIZE = 1; // u8
+        const ACTUAL_MIN_DATA_LEN = BUMP_OFFSET + BUMP_SIZE; // Calculate minimum required length based on actual symbol length
+        // --- End Dynamic Offset Calculation --- 
+
+        // --- Add Debug Logs --- 
+        console.log(`  Symbol Length Prefix = ${symbolLength}`);
+        console.log(`  Calculated Offsets: PRICE=${PRICE_OFFSET}, EXPO=${EXPO_OFFSET}, SYMBOL_LEN=${SYMBOL_LENGTH_PREFIX_OFFSET}, SYMBOL_DATA=${SYMBOL_DATA_OFFSET}, STATUS=${STATUS_OFFSET}, TIMESTAMP=${TIMESTAMP_OFFSET}, BUMP=${BUMP_OFFSET}, ACTUAL_MIN_LEN=${ACTUAL_MIN_DATA_LEN}`);
+        // --- End Add Debug Logs ---
+
+        // Check if buffer is long enough for all fields *based on actual symbol length*
+        if (data.length < ACTUAL_MIN_DATA_LEN) {
+            console.error(`Account data too short for all fields based on actual symbol length. Len: ${data.length}, Min Required: ${ACTUAL_MIN_DATA_LEN}`);
+            return null;
+        }
+
+        // Price (i64)
+        const priceBigInt = data.readBigInt64LE(PRICE_OFFSET);
         const price = new anchor.BN(priceBigInt.toString());
 
-        // Exponent (i32) - read as little-endian signed integer
-        const exponent = data.readInt32LE(exponentOffset);
+        // Exponent (i32)
+        const exponent = data.readInt32LE(EXPO_OFFSET);
 
-        return { price, exponent };
+        // Timestamp (i64) - Read from the *correct* dynamic offset
+        const timestampBigInt = data.readBigInt64LE(TIMESTAMP_OFFSET);
+        const lastUpdatedTimestamp = new anchor.BN(timestampBigInt.toString());
+
+        // --- Add Debug Logs --- 
+        console.log(`  Parsed: PriceBN=${price.toString()}, Expo=${exponent}, TimestampBigInt=${timestampBigInt.toString()}, TimestampBN=${lastUpdatedTimestamp.toString()}`);
+        // --- End Add Debug Logs ---
+
+        return { price, exponent, lastUpdatedTimestamp };
     } catch (err) {
         console.error("Error parsing price feed data:", err);
         return null;
@@ -677,6 +726,7 @@ interface PriceData {
     address: string;
     price?: anchor.BN; // Optional because parsing might fail
     exponent?: number; // Optional
+    lastUpdatedTimestamp?: anchor.BN; // Optional
 }
 
 /**
@@ -704,6 +754,7 @@ async function fetchAndDisplayPriceTable() {
                 if (parsed) {
                     priceDataMap[symbol].price = parsed.price;
                     priceDataMap[symbol].exponent = parsed.exponent;
+                    priceDataMap[symbol].lastUpdatedTimestamp = parsed.lastUpdatedTimestamp;
                 }
             } else {
                  console.warn(`Could not fetch account info for ${symbol}`);
@@ -812,9 +863,11 @@ function displayPriceTable(priceDataMap: { [symbol: string]: PriceData }) {
     headerRow.style.borderBottom = '1px solid #555'; // Add underline
     headerRow.style.marginBottom = '0.5em'; // Add some space below
     headerRow.style.paddingBottom = '0.5em'; // Padding below text
+    // Rearrange header spans
     headerRow.innerHTML = `
         <span>Symbol</span>
         <span>Price $</span>
+        <span>Last Updated</span> 
         <span>Change %</span>
         <span>Action</span>
     `;
@@ -828,10 +881,25 @@ function displayPriceTable(priceDataMap: { [symbol: string]: PriceData }) {
             ? formatDisplayPrice(data.price, data.exponent)
             : 'N/A';
 
+        // --- Format Timestamp --- 
+        let timestampStr = 'N/A';
+        if (data.lastUpdatedTimestamp) {
+            try {
+                const timestampMillis = data.lastUpdatedTimestamp.toNumber() * 1000;
+                timestampStr = new Date(timestampMillis).toLocaleString();
+            } catch (e) {
+                console.warn(`Timestamp BN too large for ${symbol}, showing raw: ${data.lastUpdatedTimestamp.toString()}`);
+                timestampStr = data.lastUpdatedTimestamp.toString() + " (raw)"; 
+            }
+        }
+        // --- End Format Timestamp ---
+
         const row = document.createElement('div');
+        // Rearrange data spans
         row.innerHTML = `
             <span>${symbol}</span>
             <span>${currentPriceStr}</span>
+            <span>${timestampStr}</span>
             <span><input type="number" class="percentage-input" placeholder="+/-%" data-symbol="${symbol}" step="any" /></span>
             <span><button class="update-percentage-button" data-symbol="${symbol}" ${currentPriceStr === 'N/A' ? 'disabled' : ''}>Update</button></span>
         `;

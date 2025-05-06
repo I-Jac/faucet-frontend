@@ -745,10 +745,23 @@ async function fetchAndDisplayPriceTable() {
     });
 
     try {
-        const accountsInfo = await connection.getMultipleAccountsInfo(feedPubkeys);
+        // const accountsInfo = await connection.getMultipleAccountsInfo(feedPubkeys);
         
-        accountsInfo.forEach((accInfo, index) => {
-            const symbol = feedEntries[index][0];
+        // --- Batch fetching account info ---
+        let allAccountsInfo: (anchor.web3.AccountInfo<Buffer> | null)[] = [];
+        const chunkSize = 100;
+        for (let i = 0; i < feedPubkeys.length; i += chunkSize) {
+            const chunkPubkeys = feedPubkeys.slice(i, i + chunkSize);
+            if (chunkPubkeys.length > 0) {
+                console.log(`Fetching chunk ${i / chunkSize + 1}: ${chunkPubkeys.length} accounts`);
+                const chunkAccountsInfo = await connection.getMultipleAccountsInfo(chunkPubkeys);
+                allAccountsInfo = allAccountsInfo.concat(chunkAccountsInfo);
+            }
+        }
+        // --- End batch fetching ---
+
+        allAccountsInfo.forEach((accInfo, index) => {
+            const symbol = feedEntries[index][0]; // Relies on feedEntries and allAccountsInfo having the same order
             if (accInfo) {
                 const parsed = parsePriceFeedData(accInfo.data);
                 if (parsed) {

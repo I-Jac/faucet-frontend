@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/mock_price_feed.json`.
  */
 export type MockPriceFeed = {
-  "address": "GY2D8uCe6UEPniaAFznZFzZbh5rRQqFfxyonhY4eKsx4",
+  "address": "6H22uizWr1Pjd7T3vSExzXegdMsbTuDnLnTF4SPmWuqU",
   "metadata": {
     "name": "mockPriceFeed",
     "version": "0.1.0",

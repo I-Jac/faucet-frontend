@@ -51,8 +51,8 @@ const MINT_ADDRESSES: { [symbol: string]: string } = MINT_ADDRESSES_DATA as { [s
 const MOCK_PRICE_FEEDS: { [symbol: string]: string } = MOCK_PRICE_FEEDS_DATA as { [symbol: string]: string };
 
 // 3. Configure your RPC Endpoint (localhost, devnet, etc.)
-const RPC_ENDPOINT = 'http://127.0.0.1:8900'; // Use port 8900
-//const RPC_ENDPOINT = 'https://api.devnet.solana.com'; // Use devnet
+// const RPC_ENDPOINT = 'http://127.0.0.1:8900'; // Use port 8900
+const RPC_ENDPOINT = 'https://api.devnet.solana.com'; // Use devnet
 
 // --- End Configuration ---
 
